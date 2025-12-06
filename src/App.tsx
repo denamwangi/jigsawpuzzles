@@ -1,158 +1,147 @@
-import { useState, useRef, useEffect } from 'react'
-import './App.css'
-
+import { useState, useRef, useEffect, type MouseEvent } from 'react';
+import DebugPanel from './DebugPanel';
+import type { GridConfig, PuzzlePiece } from './types';
+import { drawPuzzlePiece } from './utils/canvas';
+import './App.css';
 
 function App() {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() =>{
-    const img = new Image();
-    img.onload = ()=>{
-      setImage(img);
-    };
-    img.src = '/cat.jpg';
-  }, [])
-
-  interface GridConfig {
-    rows: number;
-    cols: number;
-    pieceWidth: number;
-    pieceHeight: number;
-  };
-
-  const drawGrid = (ctx: CanvasRenderingContext2D, image: HTMLImageElement, config: GridConfig): void => {
-    const { rows, cols, pieceWidth, pieceHeight } = config;
-
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const sx = col * pieceWidth;
-        const dx = col * pieceWidth;
-        const sy = row * pieceHeight;
-        const dy = row * pieceHeight;
-
-        ctx.drawImage(image, 
-          sx, sy, pieceWidth, pieceHeight,
-          dx, dy, pieceWidth, pieceHeight,
-        );
-
-        // ctx.drawImage(image, 
-        //   sx, sy, pieceWidth, pieceHeight,
-        //   sx, sy, pieceWidth, pieceHeight,
-        // );
-        ctx.strokeStyle = '#000';
-        ctx.strokeRect(dx, dy, pieceWidth, pieceHeight);
-      }
-    }
-    
-
-  }
-  interface point {
-    x: number,
-    y: number,
-  };
-  interface clipRect {
+  const [config, setConfig] = useState<GridConfig | null>(null);
+  const [movingPiece, setMovingPiece] = useState<number | null>(null);
+  const [pieces, setPieces] = useState<Array<PuzzlePiece> | null>(null);
+  const [prevMousePos, setPrevMousePos] = useState<{
     x: number;
     y: number;
-    width: number;
-    height: number;
-  };
+  } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const drawDiamond = (ctx: CanvasRenderingContext2D, center: point, size: number) => {
-    ctx.beginPath();
-    ctx.moveTo(center.x, center.y - size);
-    ctx.lineTo(center.x+size, center.y);
-    ctx.lineTo(center.x, center.y+size);
-    ctx.lineTo(center.x-size, center.y);
-    ctx.closePath();
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      setImage(img);
 
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
+      const config: GridConfig = {
+        rows: 3,
+        cols: 3,
+        pieceWidth: img.width / 3,
+        pieceHeight: img.height / 3,
+      };
+      setConfig(config);
+    };
+    img.src = '/cat.jpg';
+  }, []);
 
-  const drawTriangle = (ctx: CanvasRenderingContext2D, center: point, size: number): void => {
-    ctx.beginPath();
-    ctx.moveTo(center.x, center.y - size);
-    ctx.lineTo(center.x+size, center.y);
-    ctx.lineTo(center.x-size, center.y);
-    
-    ctx.closePath();
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-  }
+  useEffect(() => {
+    const canvas = canvasRef?.current;
+    if (!config || !canvas) return;
 
+    const generateInitialPieces = (): Array<PuzzlePiece> => {
+      const { rows, cols, pieceWidth, pieceHeight } = config;
+      const cw = canvas.width - 100;
+      const ch = canvas.height - 100;
+      const initialPieces = [];
+      let i = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = col * pieceWidth;
+          const y = row * pieceHeight;
+          initialPieces.push({
+            id: i,
+            sourceX: x,
+            sourceY: y,
+            destX: Math.random() * cw,
+            destY: Math.random() * ch,
+          });
+          i++;
+        }
+      }
+      return initialPieces;
+    };
 
+    const pieces = generateInitialPieces();
+    setPieces(pieces);
+  }, [config]);
 
-  const circleClip = (ctx: CanvasRenderingContext2D): void => {
-    ctx.beginPath();
-    ctx.arc(150, 150, 100, 0, Math.PI * 2);
-    ctx.closePath();
-  };
-
-
-
-  useEffect(()=>{
-
-  const drawClippedImage = (
-    ctx: CanvasRenderingContext2D,
-    image: HTMLImageElement,
-    clipShape: (ctx: CanvasRenderingContext2D) => void,
-    sourceRect: clipRect,
-    destRect: clipRect,
-  ): void => {
-    ctx.save();
-
-
-    clipShape(ctx);
-    ctx.clip();
-
-    ctx.drawImage(
-      image, 
-      sourceRect.x, sourceRect.y, sourceRect.width, sourceRect.height,
-      destRect.x, destRect.y, destRect.width, destRect.height,
-    );
-
-
-    ctx.restore();
-
-  };
-    console.log('have image!');
+  // Draw puzzle pieces
+  useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
 
-    if (!ctx || !canvas || !image) return;
+    if (!ctx || !canvas || !image || !pieces || !config) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces?.map((piece) => drawPuzzlePiece(ctx, image, piece, config));
+  }, [pieces, image, config]);
 
-    const config: GridConfig = {
-      rows: 3,
-      cols: 3,
-      pieceWidth: image.width / 3,
-      pieceHeight: image.height / 3,
-    }
-    // drawGrid(ctx, image, config);
-    // drawDiamond(ctx, {x: 100, y: 100}, 50);
-    // drawTriangle(ctx, {x: 200, y: 400}, 200);
-    drawClippedImage(
-        ctx,
-        image, 
-        circleClip,
-        {x: 0, y: 0, width: 300, height: 300},
-        {x: 50, y: 50, width: 200, height: 200}
+  const handleMouseDown = (event: MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (movingPiece || !canvas || !pieces || !config) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    pieces.map((piece) => {
+      const { id, destX, destY } = piece;
+      const { pieceWidth, pieceHeight } = config;
+
+      const endX = destX + pieceWidth;
+      const endY = destY + pieceHeight;
+      if (
+        destX <= mouseX &&
+        mouseX <= endX &&
+        destY <= mouseY &&
+        mouseY <= endY
       )
-  }, [image])
+        setMovingPiece(id);
+    });
+    setPrevMousePos({ x: mouseX, y: mouseY });
+  };
+
+  const handleMouseUp = () => {
+    if (!movingPiece) return;
+    setMovingPiece(null);
+    setPrevMousePos(null);
+  };
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!movingPiece || !canvas || !pieces || !config || !prevMousePos) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    const delta = {
+      x: prevMousePos.x - mouseX,
+      y: prevMousePos.y - mouseY,
+    };
+    const updatedPieces = pieces.map((piece) =>
+      piece.id == movingPiece
+        ? {
+            ...piece,
+            destX: piece.destX - delta.x,
+            destY: piece.destY - delta.y,
+          }
+        : piece
+    );
+    setPrevMousePos({ x: mouseX, y: mouseY });
+    setPieces(updatedPieces);
+  };
 
   return (
     <div>
       <h1>Jigsaw Puzzle</h1>
-      <canvas
-        ref={canvasRef}
-        width={720}
-        height={720}
-        // style={{ border: '2px solid #333'}}
-      />
+      <div style={{ display: 'flex', gap: '20px' }}>
+        <DebugPanel mousePos={prevMousePos} />
+        <canvas
+          ref={canvasRef}
+          width={720}
+          height={720}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+        />
+      </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
